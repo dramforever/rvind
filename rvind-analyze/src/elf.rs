@@ -4,10 +4,10 @@ use std::{collections::HashMap, ops::Range};
 
 #[derive(Debug)]
 pub struct Symbol {
-    name: String,
-    section: usize,
-    addr: u64,
-    size: u64,
+    pub name: String,
+    pub section: usize,
+    pub addr: u64,
+    pub size: u64,
 }
 
 impl Symbol {
@@ -23,9 +23,9 @@ impl Symbol {
 
 #[derive(Debug)]
 pub struct Relocation {
-    symbol: Symbol,
-    ty: u32,
-    addend: Option<i64>,
+    pub symbol: Symbol,
+    pub ty: u32,
+    pub addend: Option<i64>,
 }
 
 impl Relocation {
@@ -40,10 +40,10 @@ impl Relocation {
 
 #[derive(Debug)]
 pub struct Section {
-    name: String,
-    data: Range<usize>,
-    addr: u64,
-    relocations: HashMap<u64, Vec<Relocation>>,
+    pub name: String,
+    pub data: Range<usize>,
+    pub addr: u64,
+    pub relocations: HashMap<u64, Vec<Relocation>>,
 }
 
 impl Section {
@@ -60,8 +60,8 @@ impl Section {
 
 #[derive(Debug)]
 pub struct Executable {
-    sections: Vec<Section>,
-    functions: Vec<Symbol>,
+    pub sections: Vec<Section>,
+    pub functions: Vec<Symbol>,
 }
 
 fn elf_context(elf: &elf::Elf) -> Ctx {

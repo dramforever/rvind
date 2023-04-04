@@ -9,3 +9,4 @@ edition = "2021"
 anyhow = "1.0.70"
 clap = { version = "4.2.1", features = ["derive"] }
 goblin = "0.6.1"
+lazy_static = "1.4.0"
