@@ -27,7 +27,10 @@ pub enum Operation {
     Unreachable,
     Tail,
     Const { dest: Reg, value: i64 },
-    Add { dest: Reg, base: Reg, offset: i64 },
+    Addi { dest: Reg, base: Reg, offset: i64 },
+    Addiw { dest: Reg, base: Reg, offset: i64 },
+    Add { dest: Reg, lhs: Reg, rhs: Reg },
+    Sub { dest: Reg, lhs: Reg, rhs: Reg },
     Load { dest: Reg, base: Reg, offset: i64 },
     Store { val: Reg, base: Reg, offset: i64 },
 }
@@ -41,7 +44,10 @@ impl fmt::Display for Operation {
             Unreachable => write!(f, "unreachable!"),
             Tail => write!(f, "tail"),
             Const { dest, value } => write!(f, "const {dest} <- {value}"),
-            Add { dest, base, offset } => write!(f, "add {dest} <- {offset} + {base}"),
+            Addi { dest, base, offset } => write!(f, "addi {dest} <- {offset} + {base}"),
+            Addiw { dest, base, offset } => write!(f, "addiw {dest} <- sx({offset} + {base})"),
+            Add { dest, lhs, rhs } => write!(f, "add {dest} <- {lhs} + {rhs}"),
+            Sub { dest, lhs, rhs } => write!(f, "sub {dest} <- {lhs} - {rhs}"),
             Load { dest, base, offset } => write!(f, "load {dest} <- {offset}({base})"),
             Store { val, base, offset } => write!(f, "store {val} -> {offset}({base})"),
         }
@@ -95,7 +101,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
         "addi" => {
             let operation = if let Some(rd) = Reg::from(fields["rd"]) {
                 if let Some(rs1) = Reg::from(fields["rs1"]) {
-                    Add {
+                    Addi {
                         dest: rd,
                         base: rs1,
                         offset: fields["imm12"],
@@ -229,10 +235,63 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
             }
         }
 
+        "addiw" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd"]) {
+                if let Some(rs1) = Reg::from(fields["rs1"]) {
+                    Addiw {
+                        dest: rd,
+                        base: rs1,
+                        offset: fields["imm12"],
+                    }
+                } else {
+                    Const {
+                        dest: rd,
+                        value: fields["imm12"],
+                    }
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "add" | "sub" => {
+            if let (Some(rd), Some(rs1), Some(rs2)) = (
+                Reg::from(fields["rd"]),
+                Reg::from(fields["rs1"]),
+                Reg::from(fields["rs2"]),
+            ) {
+                InsnAnalysis {
+                    operation: if enc.name == "add" {
+                        Add {
+                            dest: rd,
+                            lhs: rs1,
+                            rhs: rs2,
+                        }
+                    } else {
+                        Sub {
+                            dest: rd,
+                            lhs: rs1,
+                            rhs: rs2,
+                        }
+                    },
+                    clobbers: Vec::new(),
+                    successors: vec![next],
+                }
+            } else {
+                InsnAnalysis {
+                    operation: Nop,
+                    clobbers: Reg::from(fields["rd"]).into_iter().collect(),
+                    successors: vec![next],
+                }
+            }
+        }
+
         // FIXME: Maybe there's a better way...
         #[rustfmt::skip]
-        "auipc" | "lb" | "lh" | "lw" | "lbu" | "lhu" | "lwu" | "slti" | "sltiu" | "xori" | "ori" | "andi" | "add" | "sub" | "sll" | "slt" | "sltu" | "xor" | "srl" | "sra" | "or" | "and" | "slli" | "srli" | "srai"
-        | "addiw" | "slliw" | "srliw" | "sraiw" | "addw" | "subw" | "sllw" | "srlw" | "sraw"
+        "auipc" | "lb" | "lh" | "lw" | "lbu" | "lhu" | "lwu" | "slti" | "sltiu" | "xori" | "ori" | "andi" | "sll" | "slt" | "sltu" | "xor" | "srl" | "sra" | "or" | "and" | "slli" | "srli" | "srai"
+        | "slliw" | "srliw" | "sraiw" | "addw" | "subw" | "sllw" | "srlw" | "sraw"
         | "mul" | "mulh" | "mulhsu" | "mulhu" | "div" | "divu" | "rem" | "remu" | "mulw" | "divw" | "divuw" | "remw" | "remuw"
         | "amoswap.w" | "amoadd.w" | "amoxor.w" | "amoand.w" | "amoor.w" | "amomin.w" | "amomax.w" | "amominu.w" | "amomaxu.w"
         | "amoswap.d" | "amoadd.d" | "amoxor.d" | "amoand.d" | "amoor.d" | "amomin.d" | "amomax.d" | "amominu.d" | "amomaxu.d"
@@ -265,7 +324,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
         }
 
         "c.addi" => InsnAnalysis {
-            operation: Add {
+            operation: Addi {
                 dest: Reg::from(fields["rd_rs1_n0"]).unwrap(),
                 base: Reg::from(fields["rd_rs1_n0"]).unwrap(),
                 offset: fields["c_nzimm6hilo"],
@@ -276,7 +335,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
 
         "c.mv" => InsnAnalysis {
             operation: if let Some(rd) = Reg::from(fields["rd"]) {
-                Add {
+                Addi {
                     dest: rd,
                     base: Reg::from(fields["c_rs2_n0"]).unwrap(),
                     offset: 0,
@@ -295,7 +354,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
         },
 
         "c.addi4spn" => InsnAnalysis {
-            operation: Add {
+            operation: Addi {
                 dest: Reg::from(fields["rd_p"]).unwrap(),
                 base: Reg::from(2).unwrap(),
                 offset: fields["c_nzuimm10"],
@@ -305,7 +364,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
         },
 
         "c.addi16sp" => InsnAnalysis {
-            operation: Add {
+            operation: Addi {
                 dest: Reg::from(2).unwrap(),
                 base: Reg::from(2).unwrap(),
                 offset: fields["c_nzimm10hilo"],
@@ -436,16 +495,58 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
             successors: vec![next],
         },
 
-        "c.andi" | "c.sub" | "c.xor" | "c.or" | "c.and" | "c.srli" | "c.srai" | "c.subw"
-        | "c.addw" => InsnAnalysis {
-            operation: Nop,
-            clobbers: Reg::from(fields["rd_rs1_p"]).into_iter().collect(),
+        "c.andi" | "c.xor" | "c.or" | "c.and" | "c.srli" | "c.srai" | "c.subw" | "c.addw" => {
+            InsnAnalysis {
+                operation: Nop,
+                clobbers: Reg::from(fields["rd_rs1_p"]).into_iter().collect(),
+                successors: vec![next],
+            }
+        }
+
+        // FIXME: Why?
+        "c.addiw" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd_rs1"]) {
+                Addiw {
+                    dest: rd,
+                    base: rd,
+                    offset: fields["c_imm6hilo"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
             successors: vec![next],
         },
 
-        "c.addiw" | "c.add" => InsnAnalysis {
-            operation: Nop,
-            clobbers: Reg::from(fields["rd_rs1"]).into_iter().collect(),
+        "c.add" => {
+            if let (Some(rd), Some(rs2)) =
+                (Reg::from(fields["rd_rs1"]), Reg::from(fields["c_rs2_n0"]))
+            {
+                InsnAnalysis {
+                    operation: Add {
+                        dest: rd,
+                        lhs: rd,
+                        rhs: rs2,
+                    },
+                    clobbers: Vec::new(),
+                    successors: vec![next],
+                }
+            } else {
+                InsnAnalysis {
+                    operation: Nop,
+                    clobbers: Reg::from(fields["rd_rs1"]).into_iter().collect(),
+                    successors: vec![next],
+                }
+            }
+        }
+
+        "c.sub" => InsnAnalysis {
+            operation: Sub {
+                dest: Reg::from(fields["rd_rs1_p"]).unwrap(),
+                lhs: Reg::from(fields["rd_rs1_p"]).unwrap(),
+                rhs: Reg::from(fields["rs2_p"]).unwrap(),
+            },
+            clobbers: Vec::new(),
             successors: vec![next],
         },
 
@@ -485,7 +586,7 @@ pub enum KnownValue {
 }
 
 impl KnownValue {
-    fn add(self, offset: i64) -> Option<Self> {
+    fn addi(self, offset: i64) -> Option<Self> {
         use KnownValue::*;
 
         match self {
@@ -493,6 +594,37 @@ impl KnownValue {
             OrigSp(val) => Some(OrigSp(val.wrapping_add(offset))),
             OrigFp => None,
             OrigRa => None,
+        }
+    }
+
+    fn addiw(self, offset: i64) -> Option<Self> {
+        use KnownValue::*;
+
+        match self {
+            Abs(val) => Some(Abs(val.wrapping_add(offset) as i32 as i64)),
+            OrigSp(_) => None,
+            OrigFp => None,
+            OrigRa => None,
+        }
+    }
+
+    fn add(&self, rv: KnownValue) -> Option<KnownValue> {
+        use KnownValue::*;
+
+        match (*self, rv) {
+            (Abs(labs), rv) => rv.addi(labs),
+            (lv, Abs(rabs)) => lv.addi(rabs),
+            _ => None
+        }
+    }
+
+    fn sub(&self, rv: KnownValue) -> Option<KnownValue> {
+        use KnownValue::*;
+
+        if let Abs(rabs) = rv {
+            self.addi(rabs.wrapping_neg())
+        } else {
+            None
         }
     }
 }
@@ -546,17 +678,52 @@ impl AbstractState {
             Const { dest, value } => {
                 self.regs.insert(dest, Abs(value));
             }
-            Add { dest, base, offset } => {
+            Addi { dest, base, offset } => {
                 if let Some(val) = self.regs.get(&base) {
-                    if let Some(new_val) = val.add(offset) {
+                    if let Some(new_val) = val.addi(offset) {
                         self.regs.insert(dest, new_val);
                     } else {
                         self.regs.remove(&dest);
                     }
+                } else {
+                    self.regs.remove(&dest);
+                }
+            }
+            Addiw { dest, base, offset } => {
+                if let Some(val) = self.regs.get(&base) {
+                    if let Some(new_val) = val.addiw(offset) {
+                        self.regs.insert(dest, new_val);
+                    } else {
+                        self.regs.remove(&dest);
+                    }
+                } else {
+                    self.regs.remove(&dest);
+                }
+            }
+            Add { dest, lhs, rhs } => {
+                if let (Some(lv), Some(rv)) = (self.regs.get(&lhs), self.regs.get(&rhs)) {
+                    if let Some(new_val) = lv.add(*rv) {
+                        self.regs.insert(dest, new_val);
+                    } else {
+                        self.regs.remove(&dest);
+                    }
+                } else {
+                    self.regs.remove(&dest);
+                }
+            }
+            Sub { dest, lhs, rhs } => {
+                if let (Some(lv), Some(rv)) = (self.regs.get(&lhs), self.regs.get(&rhs)) {
+                    if let Some(new_val) = lv.sub(*rv) {
+                        self.regs.insert(dest, new_val);
+                    } else {
+                        self.regs.remove(&dest);
+                    }
+                } else {
+                    self.regs.remove(&dest);
                 }
             }
             Load { dest, base, offset } => {
-                if let Some(OrigSp(sp_off)) = self.regs.get(&base).and_then(|v| v.add(offset)) {
+                if let Some(OrigSp(sp_off)) = self.regs.get(&base).and_then(|v| v.addi(offset)) {
                     if let Some(val) = self.stack.get(&sp_off) {
                         self.regs.insert(dest, *val);
                     } else {
@@ -568,7 +735,7 @@ impl AbstractState {
             }
 
             Store { val, base, offset } => {
-                if let Some(OrigSp(sp_off)) = self.regs.get(&base).and_then(|v| v.add(offset)) {
+                if let Some(OrigSp(sp_off)) = self.regs.get(&base).and_then(|v| v.addi(offset)) {
                     if let Some(val) = self.regs.get(&val) {
                         self.stack.insert(sp_off, *val);
                     } else {
