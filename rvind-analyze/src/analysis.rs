@@ -757,8 +757,9 @@ impl AbstractState {
         merge_map(&mut self.regs, &other.regs) || merge_map(&mut self.stack, &other.stack)
     }
 
-    pub fn check(&self) {
+    pub fn check(&self, insn: &InsnAnalysis) {
         use KnownValue::*;
+        use Operation::*;
 
         match self.regs.get(&Reg::from(8).unwrap()) {
             Some(OrigFp) => {
@@ -785,6 +786,20 @@ impl AbstractState {
             }
             _ => {
                 println!("frame pointer lost");
+            }
+        }
+
+        if let Tail = &insn.operation {
+            if Some(OrigRa) != self.regs.get(&Reg::from(1).unwrap()).copied() {
+                println!("bad ra != _ra at tail");
+            }
+
+            if Some(OrigFp) != self.regs.get(&Reg::from(8).unwrap()).copied() {
+                println!("bad fp != _fp at tail");
+            }
+
+            if Some(OrigSp(0)) != self.regs.get(&Reg::from(2).unwrap()).copied() {
+                println!("bad sp != _sp at tail");
             }
         }
     }

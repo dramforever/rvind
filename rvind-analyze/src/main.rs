@@ -22,14 +22,16 @@ fn disassemble(mut addr: i64, mut bytes: &[u8], states: &HashMap<i64, analysis::
             (2, u16::from_le_bytes(bytes[..2].try_into().unwrap()) as u32)
         };
 
+        let analysis = analysis::analyze_insn(addr, &range, insn);
+
         if let Some(state) = states.get(&addr) {
             println!("{state}");
-            state.check();
+            state.check(&analysis);
         } else {
             println!("<unreachable?>");
         }
         println!("  {addr:>#10x}: {}", riscv::disassemble(insn));
-        println!("  {:>10}  = {}", "", analysis::analyze_insn(addr, &range, insn));
+        println!("  {:>10}  = {analysis}", "");
         println!();
 
         addr += ilen as i64;
