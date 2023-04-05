@@ -79,6 +79,7 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
     let enc = if let Some(enc) = crate::riscv::decode(insn) {
         enc
     } else {
+        eprintln!("Can't decode {insn:#x}");
         return UNIMP;
     };
 
@@ -115,6 +116,19 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
                 successors: vec![next],
             }
         }
+
+        "lui" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd"]) {
+                Const {
+                    dest: rd,
+                    value: fields["imm20"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
 
         "ld" => {
             if let (Some(rd), Some(rs1)) = (Reg::from(fields["rd"]), Reg::from(fields["rs1"])) {
@@ -198,27 +212,262 @@ pub fn analyze_insn(pc: i64, range: &Range<i64>, insn: u32) -> InsnAnalysis {
             }
         }
 
-        "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" => InsnAnalysis {
-            operation: Nop,
-            clobbers: Vec::new(),
-            successors: vec![next, fields["bimm12hilo"]],
-        },
+        "beq" | "bne" | "blt" | "bge" | "bltu" | "bgeu" => {
+            let off = fields["bimm12hilo"];
+            if range.contains(&pc.wrapping_add(off)) {
+                InsnAnalysis {
+                    operation: Nop,
+                    clobbers: Vec::new(),
+                    successors: vec![next, off],
+                }
+            } else {
+                InsnAnalysis {
+                    operation: Tail,
+                    clobbers: Vec::new(),
+                    successors: vec![next],
+                }
+            }
+        }
 
         // FIXME: Maybe there's a better way...
-        "auipc" | "lb" | "lh" | "lw" | "lbu" | "lhu" | "lwu" | "slti" | "sltiu" | "xori"
-        | "ori" | "andi" | "add" | "sub" | "sll" | "slt" | "sltu" | "xor" | "srl" | "sra"
-        | "or" | "and" | "slli" | "srli" | "srai" | "addiw" | "slliw" | "srliw" | "sraiw"
-        | "addw" | "subw" | "sllw" | "srlw" | "sraw" => InsnAnalysis {
+        #[rustfmt::skip]
+        "auipc" | "lb" | "lh" | "lw" | "lbu" | "lhu" | "lwu" | "slti" | "sltiu" | "xori" | "ori" | "andi" | "add" | "sub" | "sll" | "slt" | "sltu" | "xor" | "srl" | "sra" | "or" | "and" | "slli" | "srli" | "srai"
+        | "addiw" | "slliw" | "srliw" | "sraiw" | "addw" | "subw" | "sllw" | "srlw" | "sraw"
+        | "mul" | "mulh" | "mulhsu" | "mulhu" | "div" | "divu" | "rem" | "remu" | "mulw" | "divw" | "divuw" | "remw" | "remuw"
+        | "amoswap.w" | "amoadd.w" | "amoxor.w" | "amoand.w" | "amoor.w" | "amomin.w" | "amomax.w" | "amominu.w" | "amomaxu.w"
+        | "amoswap.d" | "amoadd.d" | "amoxor.d" | "amoand.d" | "amoor.d" | "amomin.d" | "amomax.d" | "amominu.d" | "amomaxu.d"
+        | "lr.w" | "sc.w" | "lr.d" | "sc.d"
+        | "csrrw" | "csrrs" | "csrrc" | "csrrwi" | "csrrsi" | "csrrci" => InsnAnalysis {
             operation: Nop,
             clobbers: Reg::from(fields["rd"]).into_iter().collect(),
             successors: vec![next],
         },
 
-        "sb" | "sh" | "sw" => InsnAnalysis {
+        "sb" | "sh" | "sw" | "fence" | "c.sw" | "c.swsp" => InsnAnalysis {
             operation: Nop,
             clobbers: Vec::new(),
             successors: vec![next],
         },
+
+        "sret" | "mret" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Vec::new(),
+            successors: vec![],
+        },
+
+        "ecall" | "fence.i" | "wfi" | "sfence.vma" => {
+            // FIXME: Handle ecall
+            InsnAnalysis {
+                operation: Nop,
+                clobbers: Vec::new(),
+                successors: vec![next],
+            }
+        }
+
+        "c.addi" => InsnAnalysis {
+            operation: Add {
+                dest: Reg::from(fields["rd_rs1_n0"]).unwrap(),
+                base: Reg::from(fields["rd_rs1_n0"]).unwrap(),
+                offset: fields["c_nzimm6hilo"],
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.mv" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd"]) {
+                Add {
+                    dest: rd,
+                    base: Reg::from(fields["c_rs2_n0"]).unwrap(),
+                    offset: 0,
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.nop" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.addi4spn" => InsnAnalysis {
+            operation: Add {
+                dest: Reg::from(fields["rd_p"]).unwrap(),
+                base: Reg::from(2).unwrap(),
+                offset: fields["c_nzuimm10"],
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.addi16sp" => InsnAnalysis {
+            operation: Add {
+                dest: Reg::from(2).unwrap(),
+                base: Reg::from(2).unwrap(),
+                offset: fields["c_nzimm10hilo"],
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.li" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd"]) {
+                Const {
+                    dest: rd,
+                    value: fields["c_imm6hilo"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.lui" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd_n2"]) {
+                Const {
+                    dest: rd,
+                    value: fields["c_nzimm18hilo"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.beqz" | "c.bnez" => {
+            let off = fields["c_bimm9hilo"];
+
+            if range.contains(&pc.wrapping_add(off)) {
+                InsnAnalysis {
+                    operation: Nop,
+                    clobbers: Vec::new(),
+                    successors: vec![next, off],
+                }
+            } else {
+                InsnAnalysis {
+                    operation: Tail,
+                    clobbers: Vec::new(),
+                    successors: vec![next],
+                }
+            }
+        }
+
+        "c.j" => {
+            let off = fields["c_imm12"];
+
+            if range.contains(&pc.wrapping_add(off)) {
+                InsnAnalysis {
+                    operation: Nop,
+                    clobbers: Vec::new(),
+                    successors: vec![off],
+                }
+            } else {
+                InsnAnalysis {
+                    operation: Tail,
+                    clobbers: Vec::new(),
+                    successors: vec![],
+                }
+            }
+        }
+
+        "c.jr" => InsnAnalysis {
+            operation: Tail,
+            clobbers: Vec::new(),
+            successors: vec![],
+        },
+
+        "c.jalr" => InsnAnalysis {
+            operation: Nop,
+            clobbers: vec![Reg::from(1).unwrap()], // FIXME: ABI clobber
+            successors: vec![next],
+        },
+
+        "c.ld" => InsnAnalysis {
+            operation: Load {
+                dest: Reg::from(fields["rd_p"]).unwrap(),
+                base: Reg::from(fields["rs1_p"]).unwrap(),
+                offset: fields["c_uimm8hilo"],
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.sd" => InsnAnalysis {
+            operation: Store {
+                val: Reg::from(fields["rs2_p"]).unwrap(),
+                base: Reg::from(fields["rs1_p"]).unwrap(),
+                offset: fields["c_uimm8hilo"],
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.ldsp" => InsnAnalysis {
+            operation: if let Some(rd) = Reg::from(fields["rd_n0"]) {
+                Load {
+                    dest: rd,
+                    base: Reg::from(2).unwrap(),
+                    offset: fields["c_uimm9sphilo"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.sdsp" => InsnAnalysis {
+            operation: if let Some(rs2) = Reg::from(fields["c_rs2"]) {
+                Store {
+                    val: rs2,
+                    base: Reg::from(2).unwrap(),
+                    offset: fields["c_uimm9sp_s"],
+                }
+            } else {
+                Nop
+            },
+            clobbers: Vec::new(),
+            successors: vec![next],
+        },
+
+        "c.andi" | "c.sub" | "c.xor" | "c.or" | "c.and" | "c.srli" | "c.srai" | "c.subw"
+        | "c.addw" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Reg::from(fields["rd_rs1_p"]).into_iter().collect(),
+            successors: vec![next],
+        },
+
+        "c.addiw" | "c.add" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Reg::from(fields["rd_rs1"]).into_iter().collect(),
+            successors: vec![next],
+        },
+
+        "c.slli" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Reg::from(fields["rd_rs1_n0"]).into_iter().collect(),
+            successors: vec![next],
+        },
+
+        "c.lw" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Reg::from(fields["rd_p"]).into_iter().collect(),
+            successors: vec![next],
+        },
+
+        "c.lwsp" => InsnAnalysis {
+            operation: Nop,
+            clobbers: Reg::from(fields["rd_n0"]).into_iter().collect(),
+            successors: vec![next],
+        },
+
+        "c.unimp" | "c.ebreak" => UNIMP,
 
         _ => {
             eprintln!("Unhandled instruction {}", enc.name);
@@ -340,6 +589,38 @@ impl AbstractState {
     fn merge(&mut self, other: &Self) -> bool {
         merge_map(&mut self.regs, &other.regs) || merge_map(&mut self.stack, &other.stack)
     }
+
+    pub fn check(&self) {
+        use KnownValue::*;
+
+        match self.regs.get(&Reg::from(8).unwrap()) {
+            Some(OrigFp) => {
+                println!("fp = original fp");
+                if let Some(OrigRa) = self.regs.get(&Reg::from(1).unwrap()) {
+                    println!("ra okay");
+                } else {
+                    println!("ra invalid!");
+                }
+            }
+            Some(OrigSp(off)) => {
+                println!("new fp");
+                if let Some(OrigRa) = self.stack.get(&off.wrapping_sub(8)) {
+                    println!("saved ra okay");
+                } else {
+                    println!("saved ra invalid!");
+                }
+
+                if let Some(OrigFp) = self.stack.get(&off.wrapping_sub(16)) {
+                    println!("saved fp okay");
+                } else {
+                    println!("saved fp invalid!");
+                }
+            }
+            _ => {
+                println!("frame pointer lost");
+            }
+        }
+    }
 }
 
 impl fmt::Display for AbstractState {
@@ -378,8 +659,9 @@ pub fn analyze(addr: i64, bytes: &[u8]) -> HashMap<i64, AbstractState> {
     while let Some(pc) = queue.pop_front() {
         let mut state = res[&pc].clone();
 
-        if let Some(first) = bytes.first() {
-            let off = (pc - addr) as usize;
+        let off = (pc - addr) as usize;
+
+        if let Some(first) = bytes[off..].first() {
             let insn = if first & 0b11 == 0b11 {
                 u32::from_le_bytes(bytes[off..][..4].try_into().unwrap())
             } else {

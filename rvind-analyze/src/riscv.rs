@@ -65,7 +65,7 @@ static ENCODINGS_32_DATA: &[Encoding] = &[
     Encoding { name: "sra", mask: 0xfe00707f, value: 0x40005033, fields: &["rd", "rs1", "rs2"] },
     Encoding { name: "or", mask: 0xfe00707f, value: 0x00006033, fields: &["rd", "rs1", "rs2"] },
     Encoding { name: "and", mask: 0xfe00707f, value: 0x00007033, fields: &["rd", "rs1", "rs2"] },
-    Encoding { name: "fence", mask: 0x0000707f, value: 0x0000000f, fields: &["rd", "rs1", "fm", "pred", "succ"] },
+    Encoding { name: "fence", mask: 0x0000707f, value: 0x0000000f, fields: &[] /* &["rd", "rs1", "fm", "pred", "succ"] */ },
     Encoding { name: "ecall", mask: 0xffffffff, value: 0x00000073, fields: &[] },
     Encoding { name: "ebreak", mask: 0xffffffff, value: 0x00100073, fields: &[] },
 
@@ -85,6 +85,111 @@ static ENCODINGS_32_DATA: &[Encoding] = &[
     Encoding { name: "sllw", mask: 0xfe00707f, value: 0x0000103b, fields: &["rd", "rs1", "rs2"] },
     Encoding { name: "srlw", mask: 0xfe00707f, value: 0x0000503b, fields: &["rd", "rs1", "rs2"] },
     Encoding { name: "sraw", mask: 0xfe00707f, value: 0x4000503b, fields: &["rd", "rs1", "rs2"] },
+
+    // rv_m
+    Encoding { name: "mul", mask: 0xfe00707f, value: 0x02000033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "mulh", mask: 0xfe00707f, value: 0x02001033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "mulhsu", mask: 0xfe00707f, value: 0x02002033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "mulhu", mask: 0xfe00707f, value: 0x02003033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "div", mask: 0xfe00707f, value: 0x02004033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "divu", mask: 0xfe00707f, value: 0x02005033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "rem", mask: 0xfe00707f, value: 0x02006033, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "remu", mask: 0xfe00707f, value: 0x02007033, fields: &["rd", "rs1", "rs2"] },
+
+    // rv64_m
+    Encoding { name: "mulw", mask: 0xfe00707f, value: 0x0200003b, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "divw", mask: 0xfe00707f, value: 0x0200403b, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "divuw", mask: 0xfe00707f, value: 0x0200503b, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "remw", mask: 0xfe00707f, value: 0x0200603b, fields: &["rd", "rs1", "rs2"] },
+    Encoding { name: "remuw", mask: 0xfe00707f, value: 0x0200703b, fields: &["rd", "rs1", "rs2"] },
+
+    // rv_a
+    Encoding { name: "lr.w", mask: 0xf9f0707f, value: 0x1000202f, fields: &["rd", "rs1", /* "aq", "rl" */] },
+    Encoding { name: "sc.w", mask: 0xf800707f, value: 0x1800202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoswap.w", mask: 0xf800707f, value: 0x0800202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoadd.w", mask: 0xf800707f, value: 0x0000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoxor.w", mask: 0xf800707f, value: 0x2000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoand.w", mask: 0xf800707f, value: 0x6000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoor.w", mask: 0xf800707f, value: 0x4000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomin.w", mask: 0xf800707f, value: 0x8000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomax.w", mask: 0xf800707f, value: 0xa000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amominu.w", mask: 0xf800707f, value: 0xc000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomaxu.w", mask: 0xf800707f, value: 0xe000202f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+
+    // rv64_a
+    Encoding { name: "lr.d", mask: 0xf9f0707f, value: 0x1000302f, fields: &["rd", "rs1", /* "aq", "rl" */] },
+    Encoding { name: "sc.d", mask: 0xf800707f, value: 0x1800302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoswap.d", mask: 0xf800707f, value: 0x0800302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoadd.d", mask: 0xf800707f, value: 0x0000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoxor.d", mask: 0xf800707f, value: 0x2000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoand.d", mask: 0xf800707f, value: 0x6000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amoor.d", mask: 0xf800707f, value: 0x4000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomin.d", mask: 0xf800707f, value: 0x8000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomax.d", mask: 0xf800707f, value: 0xa000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amominu.d", mask: 0xf800707f, value: 0xc000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+    Encoding { name: "amomaxu.d", mask: 0xf800707f, value: 0xe000302f, fields: &["rd", "rs1", "rs2", /* "aq", "rl" */] },
+
+    // rv_zifencei
+    Encoding { name: "fence.i", mask: 0x0000707f, value: 0x0000100f, fields: &["rd", "rs1", "imm12"] },
+
+    // rv_zicsr
+    Encoding { name: "csrrw", mask: 0x0000707f, value: 0x00001073, fields: &["rd", "rs1", "csr"] },
+    Encoding { name: "csrrs", mask: 0x0000707f, value: 0x00002073, fields: &["rd", "rs1", "csr"] },
+    Encoding { name: "csrrc", mask: 0x0000707f, value: 0x00003073, fields: &["rd", "rs1", "csr"] },
+    Encoding { name: "csrrwi", mask: 0x0000707f, value: 0x00005073, fields: &["rd", "csr", "zimm"] },
+    Encoding { name: "csrrsi", mask: 0x0000707f, value: 0x00006073, fields: &["rd", "csr", "zimm"] },
+    Encoding { name: "csrrci", mask: 0x0000707f, value: 0x00007073, fields: &["rd", "csr", "zimm"] },
+
+    // rv_system
+    Encoding { name: "mret", mask: 0xffffffff, value: 0x30200073, fields: &[] },
+    // Encoding { name: "dret", mask: 0xffffffff, value: 0x7b200073, fields: &[] },
+    Encoding { name: "wfi", mask: 0xffffffff, value: 0x10500073, fields: &[] },
+
+    // rv_s
+    Encoding { name: "sfence.vma", mask: 0xfe007fff, value: 0x12000073, fields: &["rs1", "rs2"] },
+    Encoding { name: "sret", mask: 0xffffffff, value: 0x10200073, fields: &[] },
+];
+
+#[rustfmt::skip]
+static ENCODINGS_16_DATA: &[Encoding] = &[
+    Encoding { name: "c.unimp", mask: 0xffff, value: 0x0000, fields: &[] },
+
+    // rv_c
+    Encoding { name: "c.addi4spn", mask: 0xe003, value: 0x0000, fields: &["rd_p", "c_nzuimm10"] },
+    Encoding { name: "c.lw", mask: 0xe003, value: 0x4000, fields: &["rd_p", "rs1_p", "c_uimm7hilo"] },
+    Encoding { name: "c.sw", mask: 0xe003, value: 0xc000, fields: &["rs1_p", "rs2_p", "c_uimm7hilo"] },
+    Encoding { name: "c.nop", mask: 0xef83, value: 0x0001, fields: &["c_nzimm6hilo"] },
+    Encoding { name: "c.addi", mask: 0xe003, value: 0x0001, fields: &["rd_rs1_n0", "c_nzimm6hilo"] },
+    Encoding { name: "c.li", mask: 0xe003, value: 0x4001, fields: &["rd", "c_imm6hilo"] },
+    Encoding { name: "c.addi16sp", mask: 0xef83, value: 0x6101, fields: &["c_nzimm10hilo"] },
+    Encoding { name: "c.lui", mask: 0xe003, value: 0x6001, fields: &["rd_n2", "c_nzimm18hilo"] },
+    Encoding { name: "c.andi", mask: 0xec03, value: 0x8801, fields: &["rd_rs1_p", "c_imm6hilo"] },
+    Encoding { name: "c.sub", mask: 0xfc63, value: 0x8c01, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.xor", mask: 0xfc63, value: 0x8c21, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.or", mask: 0xfc63, value: 0x8c41, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.and", mask: 0xfc63, value: 0x8c61, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.j", mask: 0xe003, value: 0xa001, fields: &["c_imm12"] },
+    Encoding { name: "c.beqz", mask: 0xe003, value: 0xc001, fields: &["rs1_p", "c_bimm9hilo"] },
+    Encoding { name: "c.bnez", mask: 0xe003, value: 0xe001, fields: &["rs1_p", "c_bimm9hilo"] },
+    Encoding { name: "c.lwsp", mask: 0xe003, value: 0x4002, fields: &["rd_n0", "c_uimm8sphilo"] },
+    Encoding { name: "c.jr", mask: 0xf07f, value: 0x8002, fields: &["rs1_n0"] },
+    Encoding { name: "c.mv", mask: 0xf003, value: 0x8002, fields: &["rd", "c_rs2_n0"] },
+    Encoding { name: "c.ebreak", mask: 0xffff, value: 0x9002, fields: &[] },
+    Encoding { name: "c.jalr", mask: 0xf07f, value: 0x9002, fields: &["c_rs1_n0"] },
+    Encoding { name: "c.add", mask: 0xf003, value: 0x9002, fields: &["rd_rs1", "c_rs2_n0"] },
+    Encoding { name: "c.swsp", mask: 0xe003, value: 0xc002, fields: &["c_rs2", "c_uimm8sp_s"] },
+
+    // rv64_c
+    Encoding { name: "c.ld", mask: 0xe003, value: 0x6000, fields: &["rd_p", "rs1_p", "c_uimm8hilo"] },
+    Encoding { name: "c.sd", mask: 0xe003, value: 0xe000, fields: &["rs1_p", "rs2_p", "c_uimm8hilo"] },
+    Encoding { name: "c.addiw", mask: 0xe003, value: 0x2001, fields: &["rd_rs1", "c_imm6hilo"] },
+    Encoding { name: "c.srli", mask: 0xec03, value: 0x8001, fields: &["rd_rs1_p", "c_nzuimm6hilo"] },
+    Encoding { name: "c.srai", mask: 0xec03, value: 0x8401, fields: &["rd_rs1_p", "c_nzuimm6hilo"] },
+    Encoding { name: "c.subw", mask: 0xfc63, value: 0x9c01, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.addw", mask: 0xfc63, value: 0x9c21, fields: &["rd_rs1_p", "rs2_p"] },
+    Encoding { name: "c.slli", mask: 0xe003, value: 0x0002, fields: &["rd_rs1_n0", "c_nzuimm6hilo"] },
+    Encoding { name: "c.ldsp", mask: 0xe003, value: 0x6002, fields: &["rd_n0", "c_uimm9sphilo"] },
+    Encoding { name: "c.sdsp", mask: 0xe003, value: 0xe002, fields: &["c_rs2", "c_uimm9sp_s"] },
 ];
 
 fn format_value(value: i64, f: &mut fmt::Formatter) -> fmt::Result {
@@ -120,6 +225,39 @@ static FIELDS_DATA: &[(&str, Field)] = &[
     // ("fm", Field { format: format_value, decode: |v| todo!() }),
     // ("pred", Field { format: format_value, decode: |v| todo!() }),
     // ("succ", Field { format: format_value, decode: |v| todo!() }),
+
+    ("csr", Field { format: format_value, decode: |v| uf(v,20,12) }),
+    ("zimm", Field { format: format_value, decode: |v| uf(v,15,5) }),
+
+    ("rd_n0", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+    ("rd_n2", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+    ("rd_rs1", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+    ("rd_rs1_n0", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+    ("rd_p", Field { format: format_reg, decode: |v| 8 + uf(v,2,3) }),
+    ("rd_rs1_p", Field { format: format_reg, decode: |v| 8 + uf(v,7,3) }),
+
+    ("rs1_n0", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+    ("rs1_p", Field { format: format_reg, decode: |v| 8 + uf(v,7,3) }),
+    ("c_rs1_n0", Field { format: format_reg, decode: |v| uf(v,7,5) }),
+
+    ("rs2_p", Field { format: format_reg, decode: |v| 8 + uf(v,2,3) }),
+    ("c_rs2", Field { format: format_reg, decode: |v| uf(v,2,5) }),
+    ("c_rs2_n0", Field { format: format_reg, decode: |v| uf(v,2,5) }),
+
+    ("c_bimm9hilo", Field { format: format_value, decode: |v| (uf(v,3,2) << 1) + (uf(v,10,2) << 3) + (uf(v,2,1) << 5) + (uf(v,5,2) << 6) + (sf(v,12, 1) << 8) }),
+    ("c_imm12", Field { format: format_value, decode: |v| (uf(v,3,3) << 1) + (uf(v,11,1) << 4) + (uf(v,2,1) << 5) + (uf(v,7,1) << 6) + (uf(v,6,1) << 7) + (uf(v,9,2) << 8) + (uf(v,8,1) << 10) + (sf(v,12,1) << 11) }),
+    ("c_imm6hilo", Field { format: format_value, decode: |v| uf(v,2,5) + (sf(v,12,1) << 5) }),
+    ("c_nzimm10hilo", Field { format: format_value, decode: |v| (uf(v,6,1) << 4) + (uf(v,2,1) << 5) + (uf(v,5,1) << 6) + (uf(v,3,2) << 7) + (sf(v,12,1) << 9) }),
+    ("c_nzimm18hilo", Field { format: format_value, decode: |v| (uf(v,2,5) + (sf(v,12,1) << 5)) << 12 }),
+    ("c_nzimm6hilo", Field { format: format_value, decode: |v| uf(v,2,5) + (sf(v,12,1) << 5) }),
+    ("c_nzuimm6hilo", Field { format: format_value, decode: |v| uf(v,2,5) + (uf(v,12,1) << 5) }),
+    ("c_nzuimm10", Field { format: format_value, decode: |v| (uf(v,6,1) << 2) + (uf(v,5,1) << 3) + (uf(v,11,2) << 4) + (uf(v,7,4) << 6) }),
+    ("c_uimm7hilo", Field { format: format_value, decode: |v| (uf(v,6,1) << 2) + (uf(v,10,3) << 3) + (uf(v,5,1) << 6) }),
+    ("c_uimm8hilo", Field { format: format_value, decode: |v| (uf(v,10,3) << 3) + (uf(v,5,2) << 6) }),
+    ("c_uimm8sp_s", Field { format: format_value, decode: |v| (uf(v,9,4) << 2) + (uf(v,7,2) << 6) }),
+    ("c_uimm9sp_s", Field { format: format_value, decode: |v| (uf(v,10,3) << 3) + (uf(v,7,3) << 6) }),
+    ("c_uimm8sphilo", Field { format: format_value, decode: |v| (uf(v,4,3) << 2) + (uf(v,12,1) << 5) + (uf(v,2,2) << 6) }),
+    ("c_uimm9sphilo", Field { format: format_value, decode: |v| (uf(v,5,2) << 3) + (uf(v,12,1) << 5) + (uf(v,2,3) << 6) }),
 ];
 
 lazy_static! {
@@ -133,24 +271,42 @@ lazy_static! {
 
         res
     };
+    static ref ENCODINGS_16: HashMap<u32, Vec<Encoding>> = {
+        let mut res: HashMap<u32, Vec<Encoding>> = HashMap::new();
+
+        for enc in ENCODINGS_16_DATA {
+            assert!((enc.mask >> 13 << 2) | (enc.mask & 0x3) == 0b11111);
+            res.entry((enc.value >> 13 << 2) | (enc.value & 0x3))
+                .or_default()
+                .push(*enc);
+        }
+
+        res
+    };
     static ref FIELDS: HashMap<&'static str, Field> = FIELDS_DATA.iter().copied().collect();
 }
 
 pub fn decode(insn: u32) -> Option<Encoding> {
     if insn & 0b11 == 0b11 {
         // 32b insn
-        ENCODINGS_32[&(insn & 0x7f)]
-            .iter()
-            .find(|enc| (insn & enc.mask) == enc.value)
-            .copied()
+        ENCODINGS_32.get(&(insn & 0x7f)).and_then(|encs| {
+            encs.iter()
+                .find(|enc| (insn & enc.mask) == enc.value)
+                .copied()
+        })
     } else {
-        // 16b insn, TODO
-        None
+        ENCODINGS_16
+            .get(&((insn >> 13 << 2) | (insn & 0x3)))
+            .and_then(|encs| {
+                encs.iter()
+                    .find(|enc| (insn & enc.mask) == enc.value)
+                    .copied()
+            })
     }
 }
 
 pub fn field(name: &str) -> Field {
-    FIELDS[name]
+    *FIELDS.get(name).expect(name)
 }
 
 #[derive(Debug)]

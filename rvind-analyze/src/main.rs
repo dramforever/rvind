@@ -24,6 +24,9 @@ fn disassemble(mut addr: i64, mut bytes: &[u8], states: &HashMap<i64, analysis::
 
         if let Some(state) = states.get(&addr) {
             println!("{state}");
+            state.check();
+        } else {
+            println!("<unreachable?>");
         }
         println!("  {addr:>#10x}: {}", riscv::disassemble(insn));
         println!("  {:>10}  = {}", "", analysis::analyze_insn(addr, &range, insn));
