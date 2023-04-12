@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use goblin::{container::Ctx, elf, strtab::Strtab};
 use std::{collections::HashMap, ops::Range};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Symbol {
     pub name: String,
     pub section: usize,
@@ -135,12 +135,14 @@ impl Executable {
             }
         }
 
-        let functions = elf
+        let mut functions: Vec<Symbol> = elf
             .syms
             .iter()
             .filter(|sym| sym.is_function() && sym.st_shndx != 0 && sym.st_size != 0)
             .map(|sym| Symbol::from(&sym, &elf.strtab))
             .collect();
+
+        functions.sort_unstable_by_key(|f| f.addr);
 
         Ok(Self {
             sections,

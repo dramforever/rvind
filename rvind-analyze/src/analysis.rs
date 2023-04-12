@@ -15,7 +15,7 @@ impl fmt::Display for Reg {
 }
 
 impl Reg {
-    fn from(value: i64) -> Option<Self> {
+    pub fn from(value: i64) -> Option<Self> {
         assert!((0..32).contains(&value));
         (value > 0).then_some(Reg(value as u8))
     }
@@ -56,9 +56,9 @@ impl fmt::Display for Operation {
 
 #[derive(Debug, Clone)]
 pub struct InsnAnalysis {
-    operation: Operation,
-    clobbers: Vec<Reg>,
-    successors: Vec<i64>,
+    pub operation: Operation,
+    pub clobbers: Vec<Reg>,
+    pub successors: Vec<i64>,
 }
 
 impl fmt::Display for InsnAnalysis {
@@ -614,7 +614,7 @@ impl KnownValue {
         match (*self, rv) {
             (Abs(labs), rv) => rv.addi(labs),
             (lv, Abs(rabs)) => lv.addi(rabs),
-            _ => None
+            _ => None,
         }
     }
 
@@ -646,6 +646,49 @@ impl fmt::Display for KnownValue {
 pub struct AbstractState {
     regs: BTreeMap<Reg, KnownValue>,
     stack: BTreeMap<i64, KnownValue>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrigSpReg {
+    Sp,
+    Fp,
+}
+
+impl fmt::Display for OrigSpReg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use OrigSpReg::*;
+        let name = match self {
+            Sp => "sp",
+            Fp => "fp",
+        };
+        write!(f, "{name}")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnwindStep {
+    pub sp_reg: OrigSpReg,
+    pub sp_offset: i64,
+    pub fp_offset: Option<i64>,
+    pub ra_offset: Option<i64>,
+}
+
+impl fmt::Display for UnwindStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        write!(f, "_sp = {} + {}", self.sp_reg, self.sp_offset)?;
+        if let Some(off) = self.fp_offset {
+            write!(f, ", _fp = {off}(_sp)")?;
+        } else {
+            write!(f, ", _fp = fp")?;
+        }
+        if let Some(off) = self.ra_offset {
+            write!(f, ", _ra = {off}(_sp)")?;
+        } else {
+            write!(f, ", _ra = ra")?;
+        }
+        write!(f, "]")
+    }
 }
 
 fn merge_map<K: Ord, V: Eq>(current: &mut BTreeMap<K, V>, other: &BTreeMap<K, V>) -> bool {
@@ -802,6 +845,39 @@ impl AbstractState {
                 println!("bad sp != _sp at tail");
             }
         }
+    }
+
+    pub fn unwind_step(&self) -> Option<UnwindStep> {
+        use KnownValue::*;
+
+        // Find original sp
+        let (sp_reg, sp_offset) =
+            if let Some(OrigSp(offset)) = self.regs.get(&Reg::from(2).unwrap()) {
+                (OrigSpReg::Sp, offset.wrapping_neg())
+            } else if let Some(OrigSp(offset)) = self.regs.get(&Reg::from(8).unwrap()) {
+                (OrigSpReg::Fp, offset.wrapping_neg())
+            } else {
+                return None;
+            };
+
+        let fp_offset = if let Some(OrigFp) = self.regs.get(&Reg::from(8).unwrap()) {
+            None
+        } else {
+            Some(*self.stack.iter().find(|(_off, &val)| val == OrigFp)?.0)
+        };
+
+        let ra_offset = if let Some(OrigRa) = self.regs.get(&Reg::from(1).unwrap()) {
+            None
+        } else {
+            Some(*self.stack.iter().find(|(_off, &val)| val == OrigRa)?.0)
+        };
+
+        Some(UnwindStep {
+            sp_reg,
+            sp_offset,
+            fp_offset,
+            ra_offset,
+        })
     }
 }
 
