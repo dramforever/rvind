@@ -5,7 +5,11 @@ mod riscv;
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use elf::Executable;
-use std::{collections::{HashMap, BTreeMap}, ffi::OsString, fs};
+use std::{
+    collections::{BTreeMap, HashMap},
+    ffi::OsString,
+    fs,
+};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -56,6 +60,13 @@ fn main() -> Result<()> {
     let buf = fs::read(file).context(anyhow!("Cannot read binary file {file:?}"))?;
     let exe = Executable::from_bytes(&buf).context(anyhow!("Failed to parse file {file:?}"))?;
 
+    let (text_index, text_section) = exe
+        .sections
+        .iter()
+        .enumerate()
+        .find(|(_, s)| s.name == ".text")
+        .ok_or(anyhow!("No .text section found"))?;
+
     let mut unwind_ranges: Vec<UnwindRange> = Vec::new();
     let mut seen_functions: BTreeMap<u64, elf::Symbol> = BTreeMap::new();
 
@@ -66,10 +77,18 @@ fn main() -> Result<()> {
         } else {
             seen_functions.insert(f.addr, f.clone());
         }
+
+        if f.section != text_index {
+            eprintln!("Function {} not in .text section", f.name);
+            continue;
+        }
+
         let sec = &exe.sections[f.section];
-        let off = f.addr - sec.addr;
-        let bytes = &buf[sec.data.clone()][off as usize..(off + f.size) as usize];
+        let off = (f.addr - sec.addr) as i64;
+        let bytes = &buf[sec.data.clone()][off as usize..(off + f.size as i64) as usize];
         let state_map = analysis::analyze(f.addr as i64, bytes);
+        disassemble(f.addr as i64, bytes, &state_map);
+
         for (addr, state) in state_map {
             if let Some(unwind) = state.unwind_step() {
                 let insn_len = if bytes[(addr - f.addr as i64) as usize] & 0b11 == 0b11 {
@@ -77,10 +96,9 @@ fn main() -> Result<()> {
                 } else {
                     2
                 };
-
                 unwind_ranges.push(UnwindRange {
-                    start: addr,
-                    end: addr + insn_len,
+                    start: addr - sec.addr as i64,
+                    end: addr - sec.addr as i64 + insn_len,
                     unwind,
                 });
             }
@@ -90,13 +108,23 @@ fn main() -> Result<()> {
     unwind_ranges.sort_unstable_by_key(|r| r.start);
 
     let mut merged: Vec<(i64, Option<analysis::UnwindStep>)> = Vec::new();
-    let mut current: i64 = unwind_ranges.first().unwrap().start;
+    let mut current: i64 = 0;
 
     for UnwindRange { start, end, unwind } in unwind_ranges {
         use std::cmp::Ordering::*;
 
         match current.cmp(&start) {
             Less => {
+                let data = &buf[text_section.data.clone()][current as usize..start as usize];
+
+                if !data.iter().all(|&x| x == 0) {
+                    eprintln!(
+                        "Cannot unwind at {:#x?}, {} bytes",
+                        current + text_section.addr as i64,
+                        data.len()
+                    );
+                }
+
                 merged.push((current, None));
                 merged.push((start, Some(unwind)));
                 current = end;
@@ -117,11 +145,11 @@ fn main() -> Result<()> {
 
     merged.push((current, None));
 
-    for (addr, unwind) in merged {
+    for (start, unwind) in &merged {
         if let Some(unwind) = unwind {
-            println!("{addr:#x} {unwind}");
+            println!("{start:#x} {unwind}");
         } else {
-            println!("{addr:#x} -");
+            println!("{start:#x} -");
         }
     }
 
