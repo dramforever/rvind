@@ -2,4 +2,5 @@
 
 members = [
     "rvind-analyze",
+    "rvind-unwinder",
 ]

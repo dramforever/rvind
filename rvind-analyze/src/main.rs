@@ -1,5 +1,6 @@
 mod analysis;
 mod elf;
+mod format;
 mod riscv;
 
 use anyhow::{anyhow, Context, Result};
@@ -13,6 +14,8 @@ use std::{
 
 #[derive(Parser, Debug)]
 struct Args {
+    #[arg(short)]
+    output: OsString,
     file: OsString,
 }
 
@@ -87,6 +90,7 @@ fn main() -> Result<()> {
         let off = (f.addr - sec.addr) as i64;
         let bytes = &buf[sec.data.clone()][off as usize..(off + f.size as i64) as usize];
         let state_map = analysis::analyze(f.addr as i64, bytes);
+        println!("{}:", f.name);
         disassemble(f.addr as i64, bytes, &state_map);
 
         for (addr, state) in state_map {
@@ -117,7 +121,7 @@ fn main() -> Result<()> {
             Less => {
                 let data = &buf[text_section.data.clone()][current as usize..start as usize];
 
-                if !data.iter().all(|&x| x == 0) {
+                if data.len() > 6 {
                     eprintln!(
                         "Cannot unwind at {:#x?}, {} bytes",
                         current + text_section.addr as i64,
@@ -152,6 +156,15 @@ fn main() -> Result<()> {
             println!("{start:#x} -");
         }
     }
+
+    let mut unwind_data: Vec<u8> = Vec::new();
+
+    for (start, unwind) in merged {
+        let data = format::convert_unwind(start, unwind);
+        unwind_data.extend(data.to_bytes());
+    }
+
+    fs::write(args.output, unwind_data)?;
 
     Ok(())
 }
