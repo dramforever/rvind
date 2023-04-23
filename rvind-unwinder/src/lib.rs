@@ -1,7 +1,7 @@
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::{fmt::Write, mem::size_of, slice};
+use core::{mem::size_of, slice};
 
 use zerocopy::{AsBytes, FromBytes};
 
@@ -50,7 +50,7 @@ pub unsafe fn unwind(
     header: &'static Header,
     context: &Context,
     first_frame: FirstFrame,
-    debug: &mut dyn FnMut(CallFrame) -> (),
+    debug: &mut dyn FnMut(CallFrame),
 ) {
     let len = header.unwind_len / size_of::<Entry>();
     let entries = unsafe { slice::from_raw_parts(header.unwind, len) };
