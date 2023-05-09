@@ -164,7 +164,45 @@ fn main() -> Result<()> {
         unwind_data.extend(data.to_bytes());
     }
 
-    fs::write(args.output, unwind_data)?;
+    fs::write(&args.output, unwind_data)?;
+
+    let mut symtab_data: Vec<u8> = Vec::new();
+    let mut strtab_data: Vec<u8> = Vec::new();
+
+    let mut functions = exe.functions.clone();
+    functions.sort_unstable_by_key(|f| f.addr);
+
+    let mut last_address: Option<u32> = None;
+
+    for f in functions {
+        if f.section != text_index {
+            continue;
+        }
+
+        let sec = &exe.sections[f.section];
+        let off: u32 = (f.addr - sec.addr).try_into().expect("Text offset overflows");
+        let str_off: u32 = strtab_data.len().try_into().expect("String offset overflows");
+
+        if last_address == Some(off) {
+            continue;
+        }
+
+        symtab_data.extend(off.to_le_bytes());
+        symtab_data.extend(str_off.to_le_bytes());
+
+        strtab_data.extend(rustc_demangle::demangle(&f.name).to_string().as_bytes());
+        strtab_data.extend(b"\0");
+
+        last_address = Some(off);
+    }
+
+    let mut symtab_file = args.output.clone();
+    symtab_file.push(".sym");
+    let mut strtab_file = args.output.clone();
+    strtab_file.push(".str");
+
+    fs::write(symtab_file, symtab_data)?;
+    fs::write(strtab_file, strtab_data)?;
 
     Ok(())
 }
